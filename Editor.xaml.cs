@@ -37,7 +37,7 @@ namespace Monaco
         public Editor()
         {
             this.InitializeComponent();
-            string path = "file:///" + Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "MonacoEditorSource\\index.html").Replace("\\", "/");
+            string path = "file:///" + Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Source\\index.html").Replace("\\", "/");
             webView.Source = new Uri(path);
 
             this.ActualThemeChanged += Editor_ActualThemeChanged;

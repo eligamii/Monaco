@@ -102,7 +102,7 @@ namespace Monaco
         {
             if (languagesList == null)
             {
-                string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "LanguagesList.txt");
+                string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Source", "LanguagesList.txt");
                 languagesList = File.ReadAllLines(path);
             }
 
