@@ -18,7 +18,8 @@ namespace Monaco
                      .Replace(@"\r", "\r")
                      .Replace(@"\t", "\t")
                      .Replace(@"\b", "\b")
-                     .Replace(@"\f", "\f");
+                     .Replace(@"\f", "\f")
+                     .Replace("\\\"", "\"");
 
             str = str.Substring(1);
             str = str.Remove(str.Length - 1);
@@ -32,6 +33,10 @@ namespace Monaco
         public delegate void TextChangedEventHandler(object sender, string args);
 
         public event TextChangedEventHandler TextChanged;
+
+        public delegate void LinkClickedEventHandler(object sender, Uri args);
+
+        public event LinkClickedEventHandler LinkClicked;
 
 
         public Editor()
@@ -70,6 +75,12 @@ namespace Monaco
                         string text = await GetTextAsync();
                         TextChanged(this, text);
                     }
+                };
+
+                s.CoreWebView2.NewWindowRequested += (s, a) =>
+                {
+                    LinkClicked(this, new Uri(a.Uri));
+                    a.Handled = true;
                 };
             };
 
