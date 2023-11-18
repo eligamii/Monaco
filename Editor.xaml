@@ -9,4 +9,5 @@
     mc:Ignorable="d">
 
     <WebView2 x:Name="webView" Opacity="0"/>
+
 </UserControl>

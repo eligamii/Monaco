@@ -4,10 +4,7 @@ using Monaco.Helpers;
 using System;
 using System.IO;
 using System.Text;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using Windows.Storage;
-using Windows.Storage.Pickers;
 using Windows.System;
 
 // To learn more about WinUI, the WinUI project structure,
@@ -21,14 +18,15 @@ namespace Monaco
 
         public new event LoadedEventHandler Loaded;
 
-        public delegate void TextChangedEventHandler(object sender, string args);
+        public delegate void TextChangedEventHandler(object sender, string text);
 
         public event TextChangedEventHandler TextChanged;
 
-        public delegate void LinkClickedEventHandler(object sender, Uri args);
+        public delegate void LinkClickedEventHandler(object sender, Uri url);
 
         public event LinkClickedEventHandler LinkClicked;
 
+        public Language? StartingLanguage { private get; set; } = null;
 
         public Editor()
         {
@@ -46,6 +44,11 @@ namespace Monaco
                 c.IsBuiltInErrorPageEnabled = false;
                 c.IsStatusBarEnabled = false;
                 c.IsWebMessageEnabled = false;
+
+                if (StartingLanguage != null)
+                {
+                    SetLanguage((Language)StartingLanguage);
+                }
 
                 s.CoreWebView2.NavigationCompleted += async (s, a) =>
                 {
@@ -78,9 +81,9 @@ namespace Monaco
             TextChanged += (s, a) => { };
 
             // Open links in the default browser instead of WebView2
-            LinkClicked += async (s, a) => 
+            LinkClicked += async (s, a) =>
             {
-                if(LinkClicked.GetInvocationList().Length < 2)
+                if (LinkClicked.GetInvocationList().Length < 2)
                 {
                     await Launcher.LaunchUriAsync(a);
                 }
@@ -105,6 +108,11 @@ namespace Monaco
                                              $"monaco.editor.setModelLanguage(model, \"{id}\")");
         }
 
+
+        public async Task<string> ExecuteAsJSAsync(string js)
+        {
+            return await webView.ExecuteScriptAsync(js);
+        }
         /// <summary>
         /// monaco.editor.getValue()
         /// </summary>
@@ -128,7 +136,7 @@ namespace Monaco
             {
                 file = path;
                 string fileString = File.ReadAllText(path);
-                if(detectLanguage)
+                if (detectLanguage)
                 {
                     var res = await webView.CoreWebView2.ExecuteScriptAsync($"var model = monaco.editor.createModel(String.raw`{fileString}`, undefined, monaco.Uri.file(String.raw`{path}`));" +
                                                                     "editor.setModel(model)");
@@ -141,9 +149,19 @@ namespace Monaco
             else throw new FileNotFoundException();
         }
 
-        public async Task<bool> SaveAsync()
+        public async Task<bool> SaveAsync(string path = "")
         {
-            if(file != string.Empty)
+            if (path != string.Empty)
+            {
+                try
+                {
+                    string text = await GetTextAsync();
+                    await File.WriteAllTextAsync(file, text, Encoding.UTF8);
+                    return true;
+                }
+                catch { }
+            }
+            else if (file != string.Empty)
             {
                 try
                 {
@@ -155,24 +173,6 @@ namespace Monaco
             }
 
             return false;
-        }
-
-        public async Task<StorageFile> SaveAsAsync(object filePickerTarget)
-        {
-            var filePicker = new FileSavePicker();
-            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(filePickerTarget);
-            WinRT.Interop.InitializeWithWindow.Initialize(filePicker, hwnd);
-
-            var file = await filePicker.PickSaveFileAsync();
-
-            if(file != null)
-            {
-                string text = await GetTextAsync();
-                await File.WriteAllTextAsync(file.Path, text);
-                return file;
-            }
-
-            return null;
         }
     }
 }
