@@ -1,8 +1,14 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Monaco.Helpers;
 using System;
 using System.IO;
+using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using Windows.Storage;
+using Windows.Storage.Pickers;
+using Windows.System;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -11,21 +17,6 @@ namespace Monaco
 {
     public sealed partial class Editor : UserControl
     {
-        private string ToCSharpString(string str)
-        {
-            str = str.Replace(@"\\", "\\")
-                     .Replace(@"\n", "\n")
-                     .Replace(@"\r", "\r")
-                     .Replace(@"\t", "\t")
-                     .Replace(@"\b", "\b")
-                     .Replace(@"\f", "\f")
-                     .Replace("\\\"", "\"");
-
-            str = str.Substring(1);
-            str = str.Remove(str.Length - 1);
-            return str;
-        }
-
         public delegate void LoadedEventHandler(object sender, object args);
 
         public new event LoadedEventHandler Loaded;
@@ -51,9 +42,7 @@ namespace Monaco
             webView.CoreWebView2Initialized += (s, a) =>
             {
                 var c = s.CoreWebView2.Settings;
-                c.AreDefaultContextMenusEnabled = false;
                 c.AreDevToolsEnabled = false;
-                c.AreBrowserAcceleratorKeysEnabled = false;
                 c.IsBuiltInErrorPageEnabled = false;
                 c.IsStatusBarEnabled = false;
                 c.IsWebMessageEnabled = false;
@@ -87,6 +76,15 @@ namespace Monaco
 
             Loaded += (s, a) => { };
             TextChanged += (s, a) => { };
+
+            // Open links in the default browser instead of WebView2
+            LinkClicked += async (s, a) => 
+            {
+                if(LinkClicked.GetInvocationList().Length < 2)
+                {
+                    await Launcher.LaunchUriAsync(a);
+                }
+            };
         }
 
         private void Editor_ActualThemeChanged(FrameworkElement sender, object args)
@@ -113,30 +111,68 @@ namespace Monaco
         public async Task<string> GetTextAsync()
         {
             string str = await webView.CoreWebView2.ExecuteScriptAsync("editor.getValue()");
-            return ToCSharpString(str);
+            return str.ToCSharpString();
         }
         /// <summary>
         /// monaco.editor.setValue(str)
         /// </summary>
         public async void SetText(string str)
         {
-            await webView.CoreWebView2.ExecuteScriptAsync($"editor.setValue({str})");
+            await webView.CoreWebView2.ExecuteScriptAsync($"editor.setValue(\"{str}\")");
         }
 
-        public async Task OpenFileAsync(string path)
+        string file = string.Empty;
+        public async Task OpenFileAsync(string path, bool detectLanguage = true)
         {
             if (File.Exists(path))
             {
+                file = path;
                 string fileString = File.ReadAllText(path);
-                await webView.CoreWebView2.ExecuteScriptAsync($"editor.setValue({fileString})");
+                if(detectLanguage)
+                {
+                    var res = await webView.CoreWebView2.ExecuteScriptAsync($"var model = monaco.editor.createModel(String.raw`{fileString}`, undefined, monaco.Uri.file(String.raw`{path}`));" +
+                                                                    "editor.setModel(model)");
+                }
+                else
+                {
+                    await webView.CoreWebView2.ExecuteScriptAsync($"editor.setValue({fileString})");
+                }
             }
             else throw new FileNotFoundException();
         }
 
-        public async Task SaveToFileAsync(string path)
+        public async Task<bool> SaveAsync()
         {
-            string text = await GetTextAsync();
-            File.WriteAllText(path, text);
+            if(file != string.Empty)
+            {
+                try
+                {
+                    string text = await GetTextAsync();
+                    await File.WriteAllTextAsync(file, text, Encoding.UTF8);
+                    return true;
+                }
+                catch { }
+            }
+
+            return false;
+        }
+
+        public async Task<StorageFile> SaveAsAsync(object filePickerTarget)
+        {
+            var filePicker = new FileSavePicker();
+            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(filePickerTarget);
+            WinRT.Interop.InitializeWithWindow.Initialize(filePicker, hwnd);
+
+            var file = await filePicker.PickSaveFileAsync();
+
+            if(file != null)
+            {
+                string text = await GetTextAsync();
+                await File.WriteAllTextAsync(file.Path, text);
+                return file;
+            }
+
+            return null;
         }
     }
 }
